@@ -58,7 +58,14 @@ THREE.DecalFactory = function( params )
 		this._orthoMatrix.multiply(this._translateMatrix);
 		
 
-		var geometry = this.createGeometry(this._orthoMatrix, mesh);
+		//var geometry = this.createGeometry(this._orthoMatrix, mesh);
+		var geometry;
+		if (mesh.geometry.attributes) {			
+			geometry = this.createGeometryFromBufferGeometry(this._orthoMatrix, mesh);
+		} else {			
+			geometry = this.createGeometry(this._orthoMatrix, mesh);
+		}
+		
 
 		var decal = new THREE.Mesh(geometry, this.decalMaterial.clone());
 	  
@@ -85,6 +92,67 @@ THREE.DecalFactory = function( params )
 			this.decals[index].obj.parent.remove(this.decals[index].obj);
 			this.decals.splice(index, 1);
 		}
+	}
+	
+	this.createGeometryFromBufferGeometry = function(matrix, mesh) {
+
+	  var geom = mesh.geometry;
+
+	  var decalGeometry = new THREE.Geometry(); 
+
+	  var projectorInverse = matrix.clone().getInverse(matrix);
+	  var meshInverse = mesh.matrixWorld.clone().getInverse(mesh.matrixWorld);
+	  var faces = [];
+
+	  for(var i = 0; i < geom.attributes.position.array.length; i+=9){
+
+	    var pts = [];
+	    var valid = false;
+		
+	    for(var v = 0; v < 9; v+=3) {
+	      
+	     
+		  var vec = new THREE.Vector3(geom.attributes.position.array[i+v],geom.attributes.position.array[i+v+1],geom.attributes.position.array[i+v+2]);
+		  console.log((i+v) + " " + (i+v+1) + " " + (i+v+2) );
+		  console.log(vec);
+		 
+	      vec.applyMatrix4(mesh.matrixWorld);
+	      vec.applyMatrix4(matrix);
+	            
+	      if((vec.z > 1) || (vec.z < -1) || (vec.x > 1) || (vec.x < -1) || (vec.y > 1) || (vec.y < -1)) {
+	      } else {
+	        valid = true;
+	      }
+
+	      pts.push(vec);
+	    }
+		
+		
+	    if(valid) {
+
+	      var uv = [];
+	      for(var n = 0; n < 3; n++){
+	        uv.push(new THREE.Vector2( (pts[n].x + 1) / 2, (pts[n].y + 1) / 2));
+	        
+	        pts[n].applyMatrix4(projectorInverse);
+	        pts[n].applyMatrix4(meshInverse);
+
+	        decalGeometry.vertices.push( pts[n] );
+	      }
+
+	      decalGeometry.faceVertexUvs[0].push(uv);
+	      
+	      var newFace = new THREE.Face3()
+
+	      newFace.a = decalGeometry.vertices.length - 3;
+	      newFace.b = decalGeometry.vertices.length - 2;
+	      newFace.c = decalGeometry.vertices.length - 1;
+	      
+	      decalGeometry.faces.push(newFace);
+	    }
+	    
+	  }
+	  return decalGeometry;
 	}
 	
 	this.createGeometry = function(matrix, mesh) {
